@@ -1,0 +1,146 @@
+---
+import { getCollection } from 'astro:content';
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import type { GetStaticPaths } from 'astro';
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const termDocs = await getCollection('docs', (entry) =>
+    entry.id.startsWith('terms/')
+  );
+  return termDocs.map((entry) => ({
+    params: { slug: entry.id.replace('terms/', '') },
+    props: { entry },
+  }));
+};
+
+const { entry } = Astro.props;
+const data = entry.data;
+
+function difficultyClass(d: string): string {
+  const lower = (d || '').toLowerCase();
+  if (lower === 'beginner') return 'mfg-difficulty--beginner';
+  if (lower === 'intermediate') return 'mfg-difficulty--intermediate';
+  if (lower === 'advanced') return 'mfg-difficulty--advanced';
+  return '';
+}
+
+function badgeInfo(status: string): { cls: string; label: string } {
+  const s = (status || '').toLowerCase();
+  if (s.includes('verified') || s.includes('published')) return { cls: 'mfg-badge--verified', label: 'Verified' };
+  if (s.includes('in review')) return { cls: 'mfg-badge--in-review', label: 'In review' };
+  if (s.includes('drafted') || s.includes('draft')) return { cls: 'mfg-badge--draft', label: 'Draft' };
+  return { cls: 'mfg-badge--not-started', label: 'Not started' };
+}
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+const isWOLifecycle = (data.title || '').toLowerCase().includes('lifecycle') ||
+  (data.title || '').toLowerCase().includes('status flow');
+
+const badge = badgeInfo(data.reviewStatus || '');
+---
+
+<StarlightPage frontmatter={{ title: data.title || '' }}>
+  <div class="not-content term-meta">
+    {data.fieldCode && (
+      <span class="mfg-tag--field-code">{data.fieldCode}</span>
+    )}
+    {data.difficulty && (
+      <span class={`mfg-difficulty ${difficultyClass(data.difficulty)}`}>
+        <span class="mfg-difficulty__dot"></span>
+        {data.difficulty}
+      </span>
+    )}
+    <span class={`mfg-badge ${badge.cls}`}>
+      <span class="mfg-badge__dot"></span>
+      <span class="mfg-badge__label">{badge.label}</span>
+    </span>
+    {data.termId && <span class="term-id">{data.termId}</span>}
+  </div>
+
+  {data.definition && (
+    <p class="definition-lead">{data.definition}</p>
+  )}
+
+  {isWOLifecycle && (
+    <div class="not-content wo-status-track">
+      <div class="wo-track-main">
+        {['WAPPR', 'APPR', 'INPRG', 'COMP', 'CLOSE'].map((step, i, arr) => (
+          <>
+            <div class="wo-track-step">
+              <div class="wo-track-step__box">{step}</div>
+            </div>
+            {i < arr.length - 1 && <span class="wo-track-arrow">&#8594;</span>}
+          </>
+        ))}
+      </div>
+      <div class="wo-track-branches">
+        <span class="wo-track-branch-label">Side statuses:</span>
+        {['WMATL', 'WSCH', 'WPCOND', 'CAN'].map((s) => (
+          <span class="wo-track-branch">{s}</span>
+        ))}
+      </div>
+    </div>
+  )}
+
+  {data.whereInMaximo && (
+    <>
+      <h2 class="section-heading">Where in Maximo</h2>
+      <p>{data.whereInMaximo}</p>
+    </>
+  )}
+
+  {data.riverbendExample && (
+    <div class="not-content riverbend-callout">
+      <span class="riverbend-callout__label">At Riverbend</span>
+      {data.riverbendExample}
+    </div>
+  )}
+
+  {data.relatedTerms && data.relatedTerms.length > 0 && (
+    <>
+      <h2 class="section-heading">Related Terms</h2>
+      <div class="not-content related-terms">
+        {data.relatedTerms.map((rt) => (
+          rt.slug
+            ? <a href={`${BASE}/terms/${rt.slug}/`} class="mfg-related-tag">{rt.label}</a>
+            : <span class="mfg-related-tag">{rt.label}</span>
+        ))}
+      </div>
+    </>
+  )}
+
+  {data.commonMisconception && (
+    <>
+      <h2 class="section-heading">Common Misconception</h2>
+      <p>{data.commonMisconception}</p>
+    </>
+  )}
+
+  {data.versionNote && (
+    <>
+      <h2 class="section-heading">Version Note</h2>
+      <p>{data.versionNote}</p>
+    </>
+  )}
+
+  {data.verifyIn && (
+    <div class="verify-in">
+      <strong>Verify in IBM Docs:</strong>{' '}
+      <a href="https://www.ibm.com/docs" rel="noopener noreferrer">{data.verifyIn}</a>
+    </div>
+  )}
+
+  <div class="not-content" style="margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--mfg-border); display: flex; justify-content: space-between; font-size: 0.875rem; flex-wrap: wrap; gap: 0.5rem;">
+    {data.prev && typeof data.prev === 'object' && 'link' in data.prev && (
+      <a href={`${BASE}${(data.prev as any).link}/`} style="color: var(--mfg-accent); text-decoration: none;">
+        &larr; {(data.prev as any).label}
+      </a>
+    )}
+    {data.next && typeof data.next === 'object' && 'link' in data.next && (
+      <a href={`${BASE}${(data.next as any).link}/`} style="color: var(--mfg-accent); text-decoration: none; margin-left: auto;">
+        {(data.next as any).label} &rarr;
+      </a>
+    )}
+  </div>
+</StarlightPage>

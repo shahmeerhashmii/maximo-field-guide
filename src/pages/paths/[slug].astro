@@ -1,0 +1,50 @@
+---
+import { getCollection } from 'astro:content';
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import type { GetStaticPaths } from 'astro';
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const pathDocs = await getCollection('docs', (entry) =>
+    entry.id.startsWith('paths/')
+  );
+  return pathDocs.map((entry) => ({
+    params: { slug: entry.id.replace('paths/', '') },
+    props: { entry },
+  }));
+};
+
+const { entry } = Astro.props;
+const data = entry.data;
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+const steps = data.steps || [];
+---
+
+<StarlightPage frontmatter={{ title: data.title || '' }}>
+  <div class="not-content">
+  <p style="font-family: var(--mfg-font-mono); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mfg-muted); margin-bottom: 1.75rem;">
+    {steps.length} steps
+  </p>
+
+  <ol class="lp-steps">
+    {steps.map((s) => (
+      <li class="lp-step-card">
+        <div class="lp-step-progress">Step {s.step} of {steps.length}</div>
+        <div class="lp-step-name">
+          {s.slug
+            ? <a href={`${BASE}/terms/${s.slug}/`}>{s.term}</a>
+            : s.term
+          }
+        </div>
+        {s.definition && (
+          <div class="lp-step-def">{s.definition}</div>
+        )}
+        {s.slug && (
+          <a href={`${BASE}/terms/${s.slug}/`} class="lp-step-more">
+            Full definition &rarr;
+          </a>
+        )}
+      </li>
+    ))}
+  </ol>
+  </div>
+</StarlightPage>

@@ -1,0 +1,189 @@
+---
+import { getCollection } from 'astro:content';
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import type { GetStaticPaths } from 'astro';
+
+export const getStaticPaths: GetStaticPaths = async () => {
+  const moduleDocs = await getCollection('docs', (entry) =>
+    entry.id.startsWith('modules/')
+  );
+  return moduleDocs.map((entry) => ({
+    params: { slug: entry.id.replace('modules/', '') },
+    props: { entry },
+  }));
+};
+
+const { entry } = Astro.props;
+const data = entry.data;
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+// Module number label e.g. "MODULE 02"
+const moduleLabel = (() => {
+  const m = (data.moduleName || '').match(/^(\d{2})/);
+  return m ? `MODULE ${m[1]}` : '';
+})();
+
+// Title without leading number, proper nouns kept, first word lowercased after the number
+// e.g. "02 Assets and Locations" -> "Assets and locations"
+// Rules: strip "NN " prefix, lowercase the first letter of each regular word unless it
+// is an acronym (all-caps 2+ chars) or a proper-noun sequence like "MAS".
+const moduleTitle = (() => {
+  const raw = (data.moduleName || '').replace(/^\d{2}\s+/, '');
+  // Split into words, lowercase words that are not all-caps acronyms
+  return raw
+    .split(' ')
+    .map((word, i) => {
+      // Keep all-caps acronyms (e.g. MAS, AI, RCM, FMEA, PMs, HSE)
+      // Matches: 2+ uppercase letters optionally followed by lowercase 's'
+      if (/^[A-Z]{2,}s?$/.test(word)) return word;
+      // Also keep mixed-case words that start with 2+ uppercase (e.g. PMs)
+      if (/^[A-Z]{2,}/.test(word)) return word;
+      // Keep words after a colon capitalised (sub-title)
+      // Lowercase everything else except the very first word
+      if (i === 0) return word;
+      return word.charAt(0).toLowerCase() + word.slice(1);
+    })
+    .join(' ');
+})();
+
+// All terms for this module
+const allTerms = await getCollection('docs', (e) => e.id.startsWith('terms/'));
+const moduleTerms = allTerms
+  .filter((t) => t.data.module === data.moduleName)
+  .sort((a, b) => (a.data.termId || '').localeCompare(b.data.termId || ''));
+
+// Group by sub-area preserving order
+const subareaOrder: string[] = [];
+const subareaMap = new Map<string, typeof moduleTerms>();
+for (const t of moduleTerms) {
+  const sa = t.data.subarea || '';
+  if (!subareaMap.has(sa)) {
+    subareaMap.set(sa, []);
+    subareaOrder.push(sa);
+  }
+  subareaMap.get(sa)!.push(t);
+}
+
+function difficultyClass(d: string): string {
+  const lower = (d || '').toLowerCase();
+  if (lower === 'beginner') return 'mfg-difficulty--beginner';
+  if (lower === 'intermediate') return 'mfg-difficulty--intermediate';
+  if (lower === 'advanced') return 'mfg-difficulty--advanced';
+  return '';
+}
+
+function badgeInfo(status: string): { cls: string; label: string } {
+  const s = (status || '').toLowerCase();
+  if (s.includes('verified') || s.includes('published')) return { cls: 'mfg-badge--verified', label: 'Verified' };
+  if (s.includes('in review')) return { cls: 'mfg-badge--in-review', label: 'In review' };
+  if (s.includes('drafted') || s.includes('draft')) return { cls: 'mfg-badge--draft', label: 'Draft' };
+  return { cls: 'mfg-badge--not-started', label: 'Not started' };
+}
+
+const begCount = moduleTerms.filter(t => (t.data.difficulty || '').toLowerCase() === 'beginner').length;
+const intCount = moduleTerms.filter(t => (t.data.difficulty || '').toLowerCase() === 'intermediate').length;
+const advCount = moduleTerms.filter(t => (t.data.difficulty || '').toLowerCase() === 'advanced').length;
+---
+
+<StarlightPage frontmatter={{ title: data.title || '' }}>
+  <!-- Module header — outside not-content so Starlight h1 is suppressed by our own h1 -->
+  <div class="not-content module-header">
+    {moduleLabel && <span class="module-header__label">{moduleLabel}</span>}
+    <h1 class="module-header__title">{moduleTitle}</h1>
+    {data.whatItCovers && <p class="module-header__desc">{data.whatItCovers}</p>}
+  </div>
+
+  <!-- Filter + table wrapped in not-content to prevent Starlight margin injection -->
+  <div class="not-content module-body">
+  <!-- Segmented filter control -->
+  <div class="module-filter" id="filter-bar">
+    <button class="filter-btn active" data-filter="all">All {moduleTerms.length}</button>
+    {begCount > 0 && <button class="filter-btn" data-filter="beginner">Beginner {begCount}</button>}
+    {intCount > 0 && <button class="filter-btn" data-filter="intermediate">Intermediate {intCount}</button>}
+    {advCount > 0 && <button class="filter-btn" data-filter="advanced">Advanced {advCount}</button>}
+  </div>
+
+  <!-- Term table — no Sub-area column, rows grouped by sub-area label -->
+  <table class="module-term-table" id="term-table">
+    <thead>
+      <tr>
+        <th class="col-term">Term</th>
+        <th class="col-diff">Difficulty</th>
+        <th class="col-status">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {subareaOrder.map((sa) => {
+        const terms = subareaMap.get(sa)!;
+        return (
+          <>
+            {sa && (
+              <tr class="subarea-label-row" data-sa-row>
+                <td colspan="3">{sa}</td>
+              </tr>
+            )}
+            {terms.map((term) => {
+              const badge = badgeInfo(term.data.reviewStatus || '');
+              return (
+                <tr data-difficulty={(term.data.difficulty || '').toLowerCase()}>
+                  <td class="col-term">
+                    <a href={`${BASE}/terms/${term.data.pageSlug}/`} class="term-link">
+                      {term.data.title}
+                    </a>
+                  </td>
+                  <td class="col-diff">
+                    <span class={`mfg-difficulty ${difficultyClass(term.data.difficulty || '')}`}>
+                      <span class="mfg-difficulty__dot"></span>
+                      {term.data.difficulty}
+                    </span>
+                  </td>
+                  <td class="col-status">
+                    <span class={`mfg-badge ${badge.cls}`}>
+                      <span class="mfg-badge__dot"></span>
+                      <span class="mfg-badge__label">{badge.label}</span>
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </>
+        );
+      })}
+    </tbody>
+  </table>
+  </div><!-- end not-content module-body -->
+
+  <script>
+    const bar = document.getElementById('filter-bar');
+    const table = document.getElementById('term-table');
+    if (bar && table) {
+      bar.addEventListener('click', (e) => {
+        const btn = (e.target as HTMLElement).closest('.filter-btn') as HTMLButtonElement | null;
+        if (!btn) return;
+        bar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const filter = btn.dataset.filter || 'all';
+        let lastVisibleSa = '';
+        // First pass: show/hide data rows
+        table.querySelectorAll('tbody tr:not([data-sa-row])').forEach((row) => {
+          const tr = row as HTMLTableRowElement;
+          tr.style.display = (filter === 'all' || tr.dataset.difficulty === filter) ? '' : 'none';
+        });
+        // Second pass: hide sub-area label rows where all following terms are hidden
+        const rows = Array.from(table.querySelectorAll('tbody tr')) as HTMLTableRowElement[];
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (row.hasAttribute('data-sa-row')) {
+            // Look ahead to see if any sibling terms are visible
+            let hasVisible = false;
+            for (let j = i + 1; j < rows.length; j++) {
+              if (rows[j].hasAttribute('data-sa-row')) break;
+              if (rows[j].style.display !== 'none') { hasVisible = true; break; }
+            }
+            row.style.display = hasVisible ? '' : 'none';
+          }
+        }
+      });
+    }
+  </script>
+</StarlightPage>
