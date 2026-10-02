@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
-const XLSX_PATH = path.resolve(ROOT, '..', 'data', 'Maximo_Glossary_Term_Map.xlsx');
+const XLSX_PATH = path.resolve(ROOT, 'data', 'Maximo_Glossary_Term_Map.xlsx');
 const CONTENT_DOCS = path.join(ROOT, 'src', 'content', 'docs');
 const REPORTS_DIR = path.join(ROOT, 'reports');
 
